@@ -29,7 +29,10 @@ async function getDevices () {
 
     const deviceInfos = await navigator.mediaDevices.enumerateDevices();
 
-    devices.value = deviceInfos.filter(device => device.kind == 'videoinput' && (device.label.includes("Webcam") || device.label.includes("Traseira")));
+    devices.value = deviceInfos.filter(device =>
+      device.kind == 'videoinput' &&
+      (device.label.toLowerCase().includes("webcam") || device.label.toLowerCase().includes("traseira") || device.label.toLowerCase().includes("rear"))
+    );
 
     if (devices.value.length > 0) {
       selectedDeviceId.value = devices.value[0].deviceId;
@@ -97,9 +100,10 @@ function startScanner () {
   })
 
   Quagga.onProcessed(async (res) => {
-    if (res && res.codeResult && lastId.value != res.codeResult.code) {
-      result.value = res.codeResult.code
-      await processScan()
+    if (res && res.codeResult && lastId.value != res.codeResult.code && phoneIsValid(res.codeResult.code)) {
+      lastId.value = res.codeResult.code
+      await processScan(res.codeResult.code)
+      codeDetected.value = false
     }
   })
 }
@@ -115,35 +119,30 @@ onUnmounted(() => {
 
 function phoneIsValid (phone) {
   const phoneRegex = /^\+?(\d{1,3})?[-. ]?\(?\d{1,4}\)?[-. ]?\d{1,4}[-. ]?\d{1,9}$/;
-  if (!phoneRegex.test(phone) && phone.length == 11) {
-    console.log('invalid phone', phone);
-  }
-
-  return phoneRegex.test(phone) && phone.length == 11
+  return phoneRegex.test(phone)
 }
 
 const success = ref()
 
-async function processScan () {
-  if (!phoneIsValid(result.value)) {
+async function processScan (phone) {
+  if (!phoneIsValid(phone) && lastId.value == phone || phone.length !== 11) {
     return
   }
 
   codeDetected.value = true
 
   if (scanType.value == 'CHECK-IN') {
-    await onCheckin(result.value)
-
+    await onCheckin(phone)
   } else {
-    await onCheckout(result.value)
+    await onCheckout(phone)
   }
+
+  lastId.value = null
 
   setTimeout(() => { codeDetected.value = false }, 2000)
 }
 
 async function onCheckin (id) {
-  console.log(id, 'checkin');
-
   try {
     let res = await eventService.put(`/check-in/${id}`)
 
@@ -161,8 +160,6 @@ async function onCheckin (id) {
 }
 
 async function onCheckout (id) {
-  console.log(id, 'checkout');
-
   try {
     let res = await eventService.put(`/check-out/${id}`)
 
@@ -190,7 +187,8 @@ async function onCheckout (id) {
       <video ref="videoRef" autoplay playsinline></video>
     </div>
 
-    <p v-if="stream" :class="['text-video', codeDetected ? success ? 'text-wrapper' : 'text-error-wrapper' : '']">{{ scanType }}</p>
+    <p v-if="stream" :class="['text-video', codeDetected ? success ? 'text-wrapper' : 'text-error-wrapper' : '']">{{
+      scanType }}</p>
 
     <div v-if="codeDetected" class="check-overlay">
       <div :class="success ? 'check-wrapper' : 'error-wrapper'">
