@@ -1,11 +1,6 @@
 import axios from 'axios'
 
-const client = axios.create({
-    withCredentials: false
-});
-
-//axios.defaults.headers.post['Content-Type'] ='application/x-www-form-urlencoded';
-axios.defaults.headers.post['Content-Type'] ='application/json';
+const client = axios.create();
 
 export abstract class BaseService {
     public readonly _basePath: string;
