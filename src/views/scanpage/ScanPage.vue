@@ -1,6 +1,7 @@
-<script setup lang="js">
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import Quagga from 'quagga'
+import { eventService } from '@/services'
 
 // function goTo(url) {
 //   window.location = url
@@ -88,21 +89,17 @@ function startScanner () {
 
   Quagga.onDetected((data) => {
 
-    if (lastId.value == data.codeResult.code) {
+    if (lastId.value == data.codeResult.code && !phoneIsValid(data.codeResult.code)) {
       return
     } else {
       lastId.value = result.value = data.codeResult.code
-      codeDetected.value = true
-
-      setTimeout(() => {
-        codeDetected.value = false
-      }, 2000)
     }
   })
 
-  Quagga.onProcessed((result) => {
-    if (result && result.codeResult && lastId.value != result.codeResult.code) {
-      result.value = result.codeResult.code
+  Quagga.onProcessed(async (res) => {
+    if (res && res.codeResult && lastId.value != res.codeResult.code) {
+      result.value = res.codeResult.code
+      await processScan()
     }
   })
 }
@@ -114,6 +111,74 @@ onMounted(() => {
 onUnmounted(() => {
   stopCamera();
 });
+
+
+function phoneIsValid (phone) {
+  const phoneRegex = /^\+?(\d{1,3})?[-. ]?\(?\d{1,4}\)?[-. ]?\d{1,4}[-. ]?\d{1,9}$/;
+  if (!phoneRegex.test(phone)) {
+    console.log('invalid phone', phone);
+  }
+
+  return phoneRegex.test(phone)
+}
+
+const success = ref()
+
+async function processScan () {
+  if (!phoneIsValid(result.value)) {
+    return
+  }
+
+  codeDetected.value = true
+
+  if (scanType.value == 'CHECK-IN') {
+    await onCheckin(result.value)
+
+  } else {
+    await onCheckout(result.value)
+  }
+
+  setTimeout(() => { codeDetected.value = false }, 2000)
+}
+
+async function onCheckin (id) {
+  console.log(id, 'checkin');
+
+  try {
+    let res = await eventService.put(`/check-in/${id}`)
+
+    if (res.status == 404) {
+      success.value = false
+      console.log(id, 'not found guest');
+      return
+    }
+
+    success.value = true
+  } catch {
+    success.value = false
+    console.log(id, 'checkin error');
+  }
+}
+
+async function onCheckout (id) {
+  console.log(id, 'checkout');
+
+  try {
+    let res = await eventService.put(`/check-out/${id}`)
+
+    if (res.status == 404) {
+      success.value = false
+      console.log(id, 'not found guest');
+      return
+    }
+
+    success.value = true
+  } catch {
+    success.value = false
+    console.log(id, 'checkout error');
+  }
+}
+
 </script>
 
 <template>
@@ -121,41 +186,38 @@ onUnmounted(() => {
 
     <v-progress-circular v-if="!stream" class="check-overlay" indeterminate></v-progress-circular>
 
-
     <div class="video-container">
       <video ref="videoRef" autoplay playsinline></video>
     </div>
-    <p v-if="stream" :class="['text-video', codeDetected ? 'text-wrapper' : '']">{{ scanType }}</p>
+
+    <p v-if="stream" :class="['text-video', codeDetected ? success ? 'text-wrapper' : 'text-error-wrapper' : '']">{{ scanType }}</p>
 
     <div v-if="codeDetected" class="check-overlay">
-      <div class="check-wrapper">
-        <svg viewBox="0 0 24 24" class="check-icon">
-          <path fill="currentColor" d="M9 16.17L4.83 12l-1.41 1.41L9 19 21 7l-1.41-1.41z" />
+      <div :class="success ? 'check-wrapper' : 'error-wrapper'">
+        <svg viewBox="0 0 24 24" :class="success ? 'check-icon' : 'error-icon'">
+          <path v-if="success" fill="currentColor" d="M9 16.17L4.83 12l-1.41 1.41L9 19 21 7l-1.41-1.41z" />
+
+          <path v-else fill="currentColor"
+            d="M18.36 6.64l-1.41-1.41L12 10.59 7.05 5.64 5.64 7.05 10.59 12l-4.95 4.95 1.41 1.41L12 13.41l4.95 4.95 1.41-1.41L13.41 12l4.95-4.95z" />
         </svg>
       </div>
     </div>
+
   </div>
 
   <v-container v-if="stream" class="button-container">
     <v-row class="justify-center">
-      <v-btn @click="toggleScanType" class="mr-4" size="large" color="secondary">{{ scanType == "CHECK-IN" ? "CHECK-OUT"
-        : "CHECK-IN" }}</v-btn>
-
+      <v-btn @click="toggleScanType" class="mr-4" size="large" color="secondary">
+        {{ scanType == "CHECK-IN" ? "CHECK-OUT" : "CHECK-IN" }}
+      </v-btn>
     </v-row>
   </v-container>
+
 </template>
-
-
-
 <style>
 .scanner-container {
   width: 90vw;
   transition: border-color 0.5s ease;
-}
-
-.scanner-container.success {
-  border-color: #28a745;
-  border-radius: 5px;
 }
 
 .video-container {
@@ -171,6 +233,36 @@ video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.video-container video {
+  width: 100vh;
+  height: 100vh;
+}
+
+.video-container::before,
+.video-container::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.video-container::before {
+  top: 0;
+  height: 30%;
+}
+
+.video-container::after {
+  bottom: 0;
+  height: 40%;
+}
+
+.video-container::before,
+.video-container::after {
+  pointer-events: none;
 }
 
 .check-overlay {
@@ -196,6 +288,23 @@ video {
   width: 60px;
   height: 60px;
   color: #28a745;
+}
+
+.error-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 120px;
+  height: 120px;
+  background-color: rgba(167, 40, 40, 0.1);
+  border: 4px solid #a72828;
+  border-radius: 20px;
+}
+
+.error-icon {
+  width: 60px;
+  height: 60px;
+  color: #a72828;
 }
 
 .button-container {
@@ -242,5 +351,9 @@ video {
 
 .text-wrapper {
   background-color: rgba(18, 230, 67, 0.397);
+}
+
+.text-error-wrapper {
+  background-color: rgba(230, 18, 18, 0.397);
 }
 </style>
