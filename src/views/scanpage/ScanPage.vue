@@ -115,11 +115,11 @@ onUnmounted(() => {
 
 function phoneIsValid (phone) {
   const phoneRegex = /^\+?(\d{1,3})?[-. ]?\(?\d{1,4}\)?[-. ]?\d{1,4}[-. ]?\d{1,9}$/;
-  if (!phoneRegex.test(phone)) {
+  if (!phoneRegex.test(phone) && phone.length == 11) {
     console.log('invalid phone', phone);
   }
 
-  return phoneRegex.test(phone)
+  return phoneRegex.test(phone) && phone.length == 11
 }
 
 const success = ref()
