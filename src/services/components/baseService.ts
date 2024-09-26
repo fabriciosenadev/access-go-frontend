@@ -13,8 +13,8 @@ export abstract class BaseService {
         return client.post(this._basePath, data)
     }
 
-    put (path?: any): Promise<any> {
-        return client.put(this._basePath + path)
+    put (data: any, path?: any): Promise<any> {
+        return client.put(this._basePath + path, data)
     }
 
     get (id: string): Promise<any> {
