@@ -142,37 +142,37 @@ async function processScan (phone) {
   setTimeout(() => { codeDetected.value = false }, 2000)
 }
 
-async function onCheckin (id) {
+async function onCheckin (SourceBarcode) {
   try {
-    let res = await eventService.put(`/check-in/${id}`)
+    let res = await eventService.put({ SourceBarcode }, "/check-in")
 
     if (res.status == 404) {
       success.value = false
-      console.log(id, 'not found guest');
+      console.log(SourceBarcode, 'not found guest');
       return
     }
 
     success.value = true
   } catch {
     success.value = false
-    console.log(id, 'checkin error');
+    console.log(SourceBarcode, 'checkin error');
   }
 }
 
-async function onCheckout (id) {
+async function onCheckout (SourceBarcode) {
   try {
-    let res = await eventService.put(`/check-out/${id}`)
+    let res = await eventService.put({ SourceBarcode }, "/check-out")
 
     if (res.status == 404) {
       success.value = false
-      console.log(id, 'not found guest');
+      console.log(SourceBarcode, 'not found guest');
       return
     }
 
     success.value = true
   } catch {
     success.value = false
-    console.log(id, 'checkout error');
+    console.log(SourceBarcode, 'checkout error');
   }
 }
 
